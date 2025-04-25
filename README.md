@@ -9,6 +9,12 @@
 
 # 配置说明
 ## 在./config文件夹下创建.env文件, 写入如下配置条目
+`
 OPENAI_API_KEY=your_api_key
 OPENAI_BASE_URL=your_base_url
 OPENAI_MODEL_NAME=your_model_name
+`
+
+# prompt
+system prompt: ./llm_object/prompts/object_detection.txt
+user prompt: Detect the 2d bounding boxes of the basket and the ball (with “label” as topping description”)
