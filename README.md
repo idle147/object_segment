@@ -27,4 +27,5 @@ OPENAI_MODEL_NAME=your_model_name`
 
 # prompt
 system prompt: `./llm_object/prompts/object_detection.txt`
+
 user prompt: `Detect the 2d bounding boxes of the basket and the ball (with “label” as topping description”)`
