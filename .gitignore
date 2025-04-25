@@ -1,5 +1,5 @@
 dataset/
-output_keyframes/
+output/
 config/.env
 
 # Byte-compiled / optimized / DLL files
