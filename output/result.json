@@ -1,1 +1,3 @@
-[]
+[
+    "Error processing E:\\桌面\\demo\\resource\\test_image\\VID_20250408_193434_frame_000090.jpg: cannot access local variable 'ret' where it is not associated with a value"
+]

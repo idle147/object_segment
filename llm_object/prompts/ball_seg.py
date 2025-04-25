@@ -1,12 +1,12 @@
+from ..prompts.models.object_model import ObjectModels, ResponseObject
 from .base_prompt import BasePrompt
-from .models import ResponseObject
 
 
 class BallSegments(BasePrompt):
     def __init__(self, llm):
-        super().__init__(llm, "ball_seg.txt", ResponseObject)
+        super().__init__(llm, "object_detection.txt", ResponseObject)
 
-    def run(self, image_data) -> ResponseObject:
+    def run(self, image_data):
         if isinstance(image_data, list):
             input_info = {"image_data": image_data}
         else:

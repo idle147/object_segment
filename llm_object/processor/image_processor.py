@@ -67,6 +67,14 @@ class ImageProcessor:
             trans_image_webp = base64.b64encode(buffered.getvalue()).decode()
         return trans_image_webp
 
+    def base64_to_image(self, b64_str: str) -> Image.Image:
+        """
+        将 Base64 字符串解码为 PIL Image
+        """
+        b64_str = b64_str.split(",")[-1]  # 去掉前缀部分
+        data = base64.b64decode(b64_str)
+        return Image.open(BytesIO(data))
+
     def load_image(self, image_file: Path, image_type="RGB"):
         """
         加载并预处理图片
@@ -145,44 +153,34 @@ class ImageProcessor:
         return image_files
 
     def draw_box(self, image, infos: ResponseObject, show_image=True):
-        """
-        在图像上绘制矩形框和标签
-
-        Args:
-            image (PIL.Image): 要绘制的图像
-            infos (dict or list[dict]):
-                或者单个 {"label": str, "bbox":[x1,y1,x2,y2]}
-                或者 [{"label":..., "bbox":...}, ...]
-        """
         draw = ImageDraw.Draw(image)
-        # 使用 TrueType 字体，指定大小并支持中文
         font = ImageFont.truetype(self.font_path, self.font_size)
+        # 增加颜色列表
+        colors = ["red", "green", "blue", "yellow", "orange", "pink", "purple", "brown", "gray", "beige"]
+        width, height = image.size
 
-        for info in infos.objects:
-            label = info.label
-            bbox = info.box_2d
-            # - "box_2d": [x_min, y_min, x_max, y_max]
-            if len(bbox) != 4:
-                continue
-            x1, y1, x2, y2 = bbox
+        for idx, info in enumerate(infos.objects):
+            # 归一化坐标 -> 像素
+            raw_box = info.box_2d
+
+            # 选择颜色
+            color = colors[idx % len(colors)]
+
+            # Convert normalized coordinates to absolute coordinates
+            abs_y1 = int(raw_box[0] / 1000 * height)
+            abs_x1 = int(raw_box[1] / 1000 * width)
+            abs_y2 = int(raw_box[2] / 1000 * height)
+            abs_x2 = int(raw_box[3] / 1000 * width)
+
+            if abs_x1 > abs_x2:
+                abs_x1, abs_x2 = abs_x2, abs_x1
+            if abs_y1 > abs_y2:
+                abs_y1, abs_y2 = abs_y2, abs_y1
 
             # 绘制边框
-            draw.rectangle([x1, y1, x2, y2], outline="red", width=5)
-
-            # 计算文本尺寸
-            tb = draw.textbbox((0, 0), label, font=font)
-            text_w, text_h = tb[2] - tb[0], tb[3] - tb[1]
-            # 文字背景和文字起点，做边界检查
-            text_x = max(x1, 0)
-            text_y = max(y1 - text_h, 0)
-            # 如果超出右侧，则左移
-            if text_x + text_w > image.width:
-                text_x = image.width - text_w
-
-            # 绘制背景
-            draw.rectangle([text_x, text_y, text_x + text_w, text_y + text_h], fill="red")
-            # 写字
-            draw.text((x1, y1 - text_h), label, fill="white", font=font)
+            draw.rectangle(((abs_x1, abs_y1), (abs_x2, abs_y2)), outline=color, width=4)
+            # 文本尺寸
+            draw.text((abs_x1 + 8, abs_y1 + 6), info.label, fill=color, font=font)
 
         if show_image:
             image.show()

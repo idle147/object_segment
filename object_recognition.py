@@ -37,11 +37,11 @@ class ObjectRecognition:
             self.output_dir.mkdir(parents=True)
 
     def evaluate(self, target_image_path: Path):
-        _, edited_img, _ = self.image_processor.load_image(target_image_path)
+        edited_img, _, _ = self.image_processor.load_image(target_image_path)
         edited_img_base64 = self.image_processor.get_base64(edited_img)
         image_info = self.get_image_info(edited_img_base64)
         try:
-            response: AIMessage = self.ball_segments.run(image_info)
+            response = self.ball_segments.run(image_info)
         except Exception as e:
             error_info = f"Error processing {target_image_path}: {e}"
             logger.error(traceback.format_exc())
@@ -50,12 +50,11 @@ class ObjectRecognition:
             logger.info(response.model_dump_json())
             # 将结果序列化为JSON字符串格式
             if self.is_debug:
-                logger.debug(f"识别结果: {response}")
                 target_img = self.image_processor.draw_box(edited_img, response, show_image=True)
                 target_img_path = self.output_dir / f"{target_image_path.stem}_result.png"
                 target_img.save(target_img_path, format="PNG")
                 logger.debug(f"保存结果图片: {target_img_path}")
-            return response.content
+            return response.model_dump_json()
 
     def get_image_info(self, edited_img_base64):
         if self.ref_img_path:
@@ -63,12 +62,12 @@ class ObjectRecognition:
             ref_img_base64 = self.image_processor.get_base64(ref_img)
             content = [
                 {
-                    "type": "text",
-                    "text": "下述图片是需要识别的物体的参考效果，该图中红框=篮筐，绿框=篮球",
-                },
-                {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/webp;base64,{ref_img_base64}"},
+                },
+                {
+                    "type": "text",
+                    "text": "上述图片是需要识别的物体的参考效果，该图中红框=篮筐，绿框=篮球",
                 },
             ]
         else:
@@ -76,12 +75,12 @@ class ObjectRecognition:
         content.extend(
             [
                 {
-                    "type": "text",
-                    "text": "请对下图相同的物体做候选框标注",
-                },
-                {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/webp;base64,{edited_img_base64}"},
+                },
+                {
+                    "type": "text",
+                    "text": "Detect the 2d bounding boxes of the basket and the ball (with “label” as topping description”)",
                 },
             ]
         )
@@ -89,7 +88,15 @@ class ObjectRecognition:
 
     def run(self, dataset_path):
         # 读取json文件
-        image_path_list = ImageProcessor.get_dataset(dataset_path)
+        dataset_path = Path(dataset_path)
+        # 判断文件是否是目录还是文件
+        if dataset_path.is_file():
+            # 如果是文件，直接读取
+            image_path_list = [dataset_path]
+        elif dataset_path.is_dir():
+            image_path_list = ImageProcessor.get_dataset(dataset_path)
+        else:
+            raise ValueError(f"无效的路径: {dataset_path}")
 
         # 使用线程池并行处理任务
         ret = []
@@ -119,5 +126,5 @@ class ObjectRecognition:
 
 if __name__ == "__main__":
     # 创建实例并运行评估
-    object_rec = ObjectRecognition("./output", is_debug=True, ref_img_path="./resource/reference_img.png")
-    object_rec.run(r"E:\桌面\demo\resource\test_image")
+    object_rec = ObjectRecognition("./output", is_debug=True, ref_img_path=None)
+    object_rec.run(r"E:\桌面\demo\resource\test_image\VID_20250408_193434_frame_000090.jpg")
