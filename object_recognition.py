@@ -6,20 +6,15 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
+from loguru import logger
 from tqdm import tqdm
 
-from processor.image_processor import ImageProcessor
-from prompts.ball_seg import BallSegments
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from loguru import logger
-
-import utils
 from config import GLOBAL_CONFIG
+from llm_object import BallSegments, ImageProcessor
 
 
 class ObjectRecognition:
-    def __init__(self, output_dir, model_name="chatgpt", is_debug=False, max_num=2000):
+    def __init__(self, output_dir, model_name="chatgpt", is_debug=False, max_num=2000, ref_img_path=None):
         if model_name == "chatgpt":
             self.llm = ChatOpenAI(**GLOBAL_CONFIG.get_config())
         else:
@@ -29,10 +24,12 @@ class ObjectRecognition:
         self.max_num = max_num
         self.model_name = model_name
         self.is_debug = is_debug
-        if self.is_debug is True:
-            print("开启Debug模式")
+        self.ref_img_path = ref_img_path
 
-        self.image_processor = ImageProcessor(max_width=128, max_height=128)
+        if self.is_debug is True:
+            logger.debug("开启Debug模式")
+
+        self.image_processor = ImageProcessor()
         self.ball_segments = BallSegments(self.llm)
 
         self.output_dir = Path(output_dir)
@@ -43,21 +40,51 @@ class ObjectRecognition:
         _, edited_img, _ = self.image_processor.load_image(target_image_path)
         edited_img_base64 = self.image_processor.get_base64(edited_img)
         image_info = self.get_image_info(edited_img_base64)
-        response: AIMessage = self.ball_segments.run(image_info)
-        # 将结果序列化为JSON字符串格式
-        return response.content
+        try:
+            response: AIMessage = self.ball_segments.run(image_info)
+        except Exception as e:
+            error_info = f"Error processing {target_image_path}: {e}"
+            logger.error(traceback.format_exc())
+            return error_info
+        else:
+            logger.info(response.model_dump_json())
+            # 将结果序列化为JSON字符串格式
+            if self.is_debug:
+                logger.debug(f"识别结果: {response}")
+                target_img = self.image_processor.draw_box(edited_img, response, show_image=True)
+                target_img_path = self.output_dir / f"{target_image_path.stem}_result.png"
+                target_img.save(target_img_path, format="PNG")
+                logger.debug(f"保存结果图片: {target_img_path}")
+            return response.content
 
     def get_image_info(self, edited_img_base64):
-        content = [
-            {
-                "type": "text",
-                "text": "下述图片是你需要识别的目标物体，请给出物体的名称和描述。",
-            },
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/webp;base64,{edited_img_base64}"},
-            },
-        ]
+        if self.ref_img_path:
+            _, ref_img, _ = self.image_processor.load_image(self.ref_img_path)
+            ref_img_base64 = self.image_processor.get_base64(ref_img)
+            content = [
+                {
+                    "type": "text",
+                    "text": "下述图片是需要识别的物体的参考效果，该图中红框=篮筐，绿框=篮球",
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/webp;base64,{ref_img_base64}"},
+                },
+            ]
+        else:
+            content = []
+        content.extend(
+            [
+                {
+                    "type": "text",
+                    "text": "请对下图相同的物体做候选框标注",
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/webp;base64,{edited_img_base64}"},
+                },
+            ]
+        )
         return HumanMessage(content=content)
 
     def run(self, dataset_path):
@@ -92,5 +119,5 @@ class ObjectRecognition:
 
 if __name__ == "__main__":
     # 创建实例并运行评估
-    object_rec = ObjectRecognition("./output", is_debug=True)
-    object_rec.run(r"E:\桌面\demo\output_keyframes")
+    object_rec = ObjectRecognition("./output", is_debug=True, ref_img_path="./resource/reference_img.png")
+    object_rec.run(r"E:\桌面\demo\resource\test_image")
